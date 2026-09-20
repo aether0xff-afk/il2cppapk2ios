@@ -280,9 +280,16 @@ class Phase2Translator:
                 )
                 continue
 
-            value = self.slide + symbol["value"]
+            # Match the Android/Bionic AArch64 relocation semantics used by
+            # the original binary. Defined symbols are based by load_bias.
+            sym_addr = self.slide + symbol["value"]
+            value = sym_addr + rel["addend"]
+
             if r_type == R_AARCH64_ABS64:
-                value += rel["addend"]
+                # Bionic applies ABS64 additively. Unity's current target has
+                # zero-filled ABS64 destinations, but preserve the real rule.
+                current = struct.unpack_from("<Q", image, dst)[0]
+                value += current
                 patched["internal_abs64"] += 1
             elif r_type == R_AARCH64_GLOB_DAT:
                 patched["internal_glob_dat"] += 1
