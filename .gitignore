@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+work/
+*.apk
+*.ipa
+*.so
+*.dylib
+*.macho
+.pytest_cache/
