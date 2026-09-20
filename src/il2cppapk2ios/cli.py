@@ -7,6 +7,7 @@ from .apk import UnityApk
 from .elf import Elf64
 from .macho import build_arm64_macho_skeleton
 from .translate import translate_phase2
+from .phase3 import translate_phase3
 
 
 def dump(obj, as_json: bool) -> None:
@@ -51,6 +52,22 @@ def main(argv=None) -> int:
         default="@rpath/libil2cpp_ported.dylib",
     )
 
+    phase3 = sub.add_parser(
+        "translate-phase3",
+        help="emit Mach-O dyld rebase/bind info and route externals to a shim dylib",
+    )
+    phase3.add_argument("elf")
+    phase3.add_argument("output")
+    phase3.add_argument("--json", action="store_true")
+    phase3.add_argument(
+        "--shim-install-name",
+        default="@rpath/libbionic_shim.dylib",
+    )
+    phase3.add_argument(
+        "--install-name",
+        default="@rpath/libil2cpp_ported.dylib",
+    )
+
     args = parser.parse_args(argv)
 
     if args.cmd == "apk-report":
@@ -66,6 +83,14 @@ def main(argv=None) -> int:
         report = translate_phase2(
             args.elf,
             args.output,
+            install_name=args.install_name,
+        )
+        dump(report, args.json)
+    elif args.cmd == "translate-phase3":
+        report = translate_phase3(
+            args.elf,
+            args.output,
+            shim_install_name=args.shim_install_name,
             install_name=args.install_name,
         )
         dump(report, args.json)
