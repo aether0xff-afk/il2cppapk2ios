@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "il2cppapk2ios"
+version = "0.1.0"
+description = "Research tooling for porting ARM64 Unity IL2CPP Android binaries toward iOS"
+requires-python = ">=3.10"
+
+[project.scripts]
+il2cppapk2ios = "il2cppapk2ios.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
