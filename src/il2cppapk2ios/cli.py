@@ -6,6 +6,7 @@ import json
 from .apk import UnityApk
 from .elf import Elf64
 from .macho import build_arm64_macho_skeleton
+from .translate import translate_phase2
 
 
 def dump(obj, as_json: bool) -> None:
@@ -38,6 +39,18 @@ def main(argv=None) -> int:
     macho = sub.add_parser("macho-smoke", help="emit unsigned ARM64 Mach-O skeleton")
     macho.add_argument("output")
 
+    phase2 = sub.add_parser(
+        "translate-phase2",
+        help="copy AArch64 PT_LOAD segments into Mach-O and resolve internal relocations",
+    )
+    phase2.add_argument("elf")
+    phase2.add_argument("output")
+    phase2.add_argument("--json", action="store_true")
+    phase2.add_argument(
+        "--install-name",
+        default="@rpath/libil2cpp_ported.dylib",
+    )
+
     args = parser.parse_args(argv)
 
     if args.cmd == "apk-report":
@@ -49,6 +62,13 @@ def main(argv=None) -> int:
             print(path)
     elif args.cmd == "macho-smoke":
         print(build_arm64_macho_skeleton(args.output))
+    elif args.cmd == "translate-phase2":
+        report = translate_phase2(
+            args.elf,
+            args.output,
+            install_name=args.install_name,
+        )
+        dump(report, args.json)
 
     return 0
 
