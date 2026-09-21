@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 #import <dlfcn.h>
 
 typedef void (*il2cpp_init_fn)(const char *);
@@ -10,7 +11,7 @@ static void a2i_log_dlerror(NSString *stage) {
     NSLog(@"[a2i] %@: %s", stage, err ? err : "(no dlerror)");
 }
 
-int main(int argc, char **argv) {
+static void a2i_probe(void) {
     @autoreleasepool {
         NSLog(@"[a2i] iOS host started");
 
@@ -70,6 +71,45 @@ int main(int argc, char **argv) {
         dlclose(il2cpp);
         dlclose(shim);
         NSLog(@"[a2i] probe complete");
-        return 0;
+    }
+}
+
+
+@interface A2IAppDelegate : UIResponder <UIApplicationDelegate>
+@property (strong, nonatomic) UIWindow *window;
+@end
+
+@implementation A2IAppDelegate
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    UIViewController *vc = [UIViewController new];
+    vc.view.backgroundColor = UIColor.systemBackgroundColor;
+
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+    label.text = @"A2I IL2CPP probe running…";
+    label.textAlignment = NSTextAlignmentCenter;
+    label.numberOfLines = 0;
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    [vc.view addSubview:label];
+    [NSLayoutConstraint activateConstraints:@[
+        [label.centerXAnchor constraintEqualToAnchor:vc.view.centerXAnchor],
+        [label.centerYAnchor constraintEqualToAnchor:vc.view.centerYAnchor],
+        [label.leadingAnchor constraintGreaterThanOrEqualToAnchor:vc.view.leadingAnchor constant:20],
+        [label.trailingAnchor constraintLessThanOrEqualToAnchor:vc.view.trailingAnchor constant:-20],
+    ]];
+
+    self.window.rootViewController = vc;
+    [self.window makeKeyAndVisible];
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        a2i_probe();
+    });
+    return YES;
+}
+@end
+
+int main(int argc, char **argv) {
+    @autoreleasepool {
+        return UIApplicationMain(argc, argv, nil, NSStringFromClass(A2IAppDelegate.class));
     }
 }
