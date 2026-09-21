@@ -34,7 +34,19 @@ jobs:
             https://*) ;;
             *) echo "apk_url must use HTTPS" >&2; exit 2 ;;
           esac
-          curl --fail --location --retry 3 --output target.apk "$APK_URL"
+          if printf '%s' "$APK_URL" | grep -q 'drive.google.com/file/d/'; then
+            FILE_ID="$(printf '%s' "$APK_URL" | sed -E 's#.*drive.google.com/file/d/([^/]+).*#\\1#')"
+            curl --fail --location --retry 3 \
+              --output target.apk \
+              "https://drive.usercontent.google.com/download?id=$FILE_ID&export=download&confirm=t"
+          else
+            curl --fail --location --retry 3 --output target.apk "$APK_URL"
+          fi
+          python3 - <<'PY'
+          import zipfile
+          if not zipfile.is_zipfile("target.apk"):
+              raise SystemExit("Downloaded file is not an APK/ZIP; check Drive sharing permissions")
+          PY
           ACTUAL="$(shasum -a 256 target.apk | awk '{print $1}')"
           echo "APK sha256=$ACTUAL"
           if [ -n "$APK_SHA256" ] && [ "$ACTUAL" != "$APK_SHA256" ]; then
