@@ -2,6 +2,14 @@ name: real-apk-ios-bundle
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/real-apk.yml"
+      - "scripts/**"
+      - "src/**"
+      - "ios_host/**"
+      - "pyproject.toml"
 
 jobs:
   build-real-bundle:
@@ -51,6 +59,7 @@ jobs:
           retention-days: 7
           path: |
             A2IHost-unsigned.zip
+            work-real/A2IHost-unsigned.ipa
             work-real/phase4-report.json
             work-real/shim-report.json
             work-real/ported-bind.txt
