@@ -51,6 +51,22 @@ jobs:
               encoding="utf-8",
           )
           (out / "objects.S").write_text(OBJECTS_ASM, encoding="utf-8")
+          objects_template = (
+              Path(shimgen.__file__).with_name("templates")
+              / "objects_compat.c"
+          )
+          stdio_template = (
+              Path(shimgen.__file__).with_name("templates")
+              / "stdio_compat.c"
+          )
+          (out / "objects_compat.c").write_text(
+              objects_template.read_text(encoding="utf-8"),
+              encoding="utf-8",
+          )
+          (out / "stdio_compat.c").write_text(
+              stdio_template.read_text(encoding="utf-8"),
+              encoding="utf-8",
+          )
           (out / "special.c").write_text(SPECIAL_C, encoding="utf-8")
           template = (
               Path(shimgen.__file__).with_name("templates")
