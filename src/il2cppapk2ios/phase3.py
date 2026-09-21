@@ -474,12 +474,14 @@ class Phase3Translator:
                 if r_type == R_AARCH64_ABS64:
                     addend += existing
 
+                symbol_type = symbol["info"] & 0x0F
                 bindings.append(
                     {
                         "offset": rel["offset"],
                         "type": r_type,
                         "symbol": symbol["name"],
                         "shim_symbol": shim_prefix + symbol["name"],
+                        "symbol_type": symbol_type,
                         "segment_index": segment_index,
                         "segment_offset": segment_offset,
                         "addend": addend,
@@ -598,6 +600,25 @@ class Phase3Translator:
         shim_symbols = sorted({
             item["shim_symbol"] for item in bindings
         })
+        type_names = {0: "notype", 1: "object", 2: "func"}
+        by_symbol = {}
+        for item in bindings:
+            entry = by_symbol.setdefault(
+                item["symbol"],
+                {
+                    "symbol": item["symbol"],
+                    "shim_symbol": item["shim_symbol"],
+                    "symbol_type": type_names.get(
+                        item["symbol_type"],
+                        f"type_{item['symbol_type']}",
+                    ),
+                    "relocation_count": 0,
+                },
+            )
+            entry["relocation_count"] += 1
+        shim_imports = [
+            by_symbol[name] for name in sorted(by_symbol)
+        ]
 
         return {
             "output": str(output),
@@ -612,6 +633,7 @@ class Phase3Translator:
             "shim_install_name": shim_install_name,
             "shim_symbol_count": len(shim_symbols),
             "shim_symbols": shim_symbols,
+            "shim_imports": shim_imports,
             "segments": [
                 {
                     "name": seg.name,
