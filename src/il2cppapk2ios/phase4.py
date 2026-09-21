@@ -302,19 +302,18 @@ class Phase4Translator(Phase3Translator):
         linkedit_vmaddr = int(report["linkedit"]["vmaddr"], 16)
 
         commands: list[bytes] = []
+        from .phase3 import _segment_with_data_section
         for seg in self.segments:
-            special = self._special_sections(seg)
-            if special:
-                commands.append(
-                    _segment_with_sections(seg, special)
-                )
-            else:
-                # Keep Phase 3's real file-backed section for segments that do
-                # not have named Phase 4 sections.  dyld/llvm validate classic
-                # bind offsets against section ranges, so a zero-sized
-                # __segstart sentinel alone is not sufficient.
-                from .phase3 import _segment_with_data_section
-                commands.append(_segment_with_data_section(seg))
+            # Classic dyld rebase/bind offsets may target any byte in the
+            # original PT_LOAD, including padding/GOT locations outside the
+            # handful of named ELF sections exposed below.  Keep one section
+            # spanning the complete file-backed PT_LOAD for dyld validation.
+            #
+            # Phase 4's named sections are descriptive only; overlapping them
+            # with the catch-all section makes llvm's bind validator reject
+            # otherwise valid locations.  Until we partition the PT_LOAD into
+            # non-overlapping Mach-O sections, prefer the complete section.
+            commands.append(_segment_with_data_section(seg))
 
         commands.append(
             _segment_no_sections(
