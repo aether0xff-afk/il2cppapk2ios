@@ -30,12 +30,14 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import il2cppapk2ios.shimgen as shimgen
+          from il2cppapk2ios.elf import ProgramHeader
           from il2cppapk2ios.shimgen import (
               _direct_assembly,
               _trap_assembly,
               SPECIAL_C,
               OBJECTS_ASM,
               BUILD_SH,
+              _elf_phdr_compat_source,
           )
 
           out = Path("shim-smoke")
@@ -56,6 +58,25 @@ jobs:
           )
           (out / "pthread_compat.c").write_text(
               template.read_text(encoding="utf-8"),
+              encoding="utf-8",
+          )
+          posix_template = (
+              Path(shimgen.__file__).with_name("templates")
+              / "posix_compat.c"
+          )
+          (out / "posix_compat.c").write_text(
+              posix_template.read_text(encoding="utf-8"),
+              encoding="utf-8",
+          )
+
+          class FakeElf:
+              program_headers = [
+                  ProgramHeader(1, 5, 0, 0, 0x1000, 0x1000, 0x1000),
+                  ProgramHeader(0x6474E550, 4, 0x800, 0x800, 0x100, 0x100, 4),
+              ]
+
+          (out / "elf_phdr_compat.c").write_text(
+              _elf_phdr_compat_source(FakeElf()),
               encoding="utf-8",
           )
           (out / "build.sh").write_text(BUILD_SH, encoding="utf-8")
