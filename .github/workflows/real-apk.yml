@@ -19,10 +19,35 @@ jobs:
         run: |
           set -euxo pipefail
           FILE_ID="1yCu8cEWuAG7J7NmTM-8pofG2M5phQ-up"
-          curl -L --retry 3 \
-            -A "Mozilla/5.0" \
-            -o target.apk \
+          COOKIE_JAR="$RUNNER_TEMP/gdrive-cookies.txt"
+          WARNING_HTML="$RUNNER_TEMP/gdrive-warning.html"
+          curl -L --retry 3 -c "$COOKIE_JAR" -A "Mozilla/5.0" \
+            -o "$WARNING_HTML" \
             "https://drive.google.com/uc?export=download&id=$FILE_ID"
+
+          CONFIRM="$(python3 - "$WARNING_HTML" <<'PY'
+          import html, re, sys
+          s = open(sys.argv[1], encoding="utf-8", errors="ignore").read()
+          s = html.unescape(s)
+          patterns = [
+              r'name="confirm" value="([^"]+)"',
+              r'[?&]confirm=([^&" ]+)',
+          ]
+          for p in patterns:
+              m = re.search(p, s)
+              if m:
+                  print(m.group(1))
+                  break
+          PY
+          )"
+
+          if [ -n "$CONFIRM" ]; then
+            curl -L --fail --retry 3 -b "$COOKIE_JAR" -A "Mozilla/5.0" \
+              -o target.apk \
+              "https://drive.google.com/uc?export=download&confirm=$CONFIRM&id=$FILE_ID"
+          else
+            cp "$WARNING_HTML" target.apk
+          fi
           ls -lh target.apk
           file target.apk
           python3 - <<'PY'
