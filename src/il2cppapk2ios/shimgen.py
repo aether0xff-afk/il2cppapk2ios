@@ -127,6 +127,7 @@ SPECIAL_C = r"""#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #ifndef PROP_VALUE_MAX
