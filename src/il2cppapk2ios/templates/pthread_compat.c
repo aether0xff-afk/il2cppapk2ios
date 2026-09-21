@@ -8,6 +8,10 @@
 #include <string.h>
 #include <time.h>
 
+#ifndef PTHREAD_STACK_MIN
+#define PTHREAD_STACK_MIN 16384
+#endif
+
 typedef int64_t a2i_pthread_t;
 typedef int32_t a2i_pthread_key_t;
 typedef int32_t a2i_pthread_once_t;
