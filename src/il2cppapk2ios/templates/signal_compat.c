@@ -8,18 +8,18 @@
 
 typedef uint64_t a2i_sigset_t;
 typedef void (*a2i_sighandler_t)(int);
-typedef void (*a2i_sigaction_handler_t)(int, void *, void *);
+typedef void (*a2i_android_sigaction_handler_t)(int, void *, void *);
 
 typedef struct {
     int sa_flags;
     int _pad;
     union {
         a2i_sighandler_t handler;
-        a2i_sigaction_handler_t sigaction_handler;
+        a2i_android_sigaction_handler_t sigaction_handler;
     } action;
     a2i_sigset_t sa_mask;
     void (*sa_restorer)(void);
-} a2i_sigaction;
+} a2i_android_sigaction;
 
 typedef struct {
     int si_signo;
@@ -30,7 +30,7 @@ typedef struct {
     unsigned char reserved[128 - 24];
 } a2i_siginfo;
 
-_Static_assert(sizeof(a2i_sigaction) == 32, "Android LP64 sigaction size");
+_Static_assert(sizeof(a2i_android_sigaction) == 32, "Android LP64 sigaction size");
 _Static_assert(sizeof(a2i_siginfo) == 128, "Linux siginfo size");
 
 enum {
@@ -43,7 +43,7 @@ enum {
     A2I_SA_RESETHAND = (int)0x80000000u,
 };
 
-static a2i_sigaction g_actions[65];
+static a2i_android_sigaction g_actions[65];
 
 static int a2i_host_signal(int android_signal) {
     switch (android_signal) {
@@ -162,7 +162,7 @@ static void a2i_signal_trampoline(
     int android_signal = a2i_android_signal(host_signal);
     if (android_signal <= 0 || android_signal >= 65) return;
 
-    a2i_sigaction action = g_actions[android_signal];
+    a2i_android_sigaction action = g_actions[android_signal];
 
     if (action.sa_flags & A2I_SA_SIGINFO) {
         a2i_siginfo info;
@@ -196,8 +196,8 @@ static void a2i_signal_trampoline(
 
 int a2i_sigaction(
     int android_signal,
-    const a2i_sigaction *new_action,
-    a2i_sigaction *old_action
+    const a2i_android_sigaction *new_action,
+    a2i_android_sigaction *old_action
 ) {
     int host_signal = a2i_host_signal(android_signal);
     if (host_signal < 0) {
@@ -235,8 +235,8 @@ a2i_sighandler_t a2i_signal(
     int android_signal,
     a2i_sighandler_t handler
 ) {
-    a2i_sigaction old_action;
-    a2i_sigaction new_action;
+    a2i_android_sigaction old_action;
+    a2i_android_sigaction new_action;
     memset(&new_action, 0, sizeof(new_action));
     new_action.action.handler = handler;
     if (a2i_sigaction(android_signal, &new_action, &old_action) != 0) {
