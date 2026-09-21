@@ -280,12 +280,12 @@ class Phase4Translator(Phase3Translator):
                 pass
 
         rebase_off = int(report["linkedit"]["fileoff"], 16)
-        bind_off = rebase_off + report["rebase_stream_size"]
+        bind_off = _align(rebase_off + report["rebase_stream_size"], 8)
         bind_end = bind_off + report["bind_stream_size"]
 
         exports = self._exports()
         export_stream = _build_export_trie(exports)
-        export_off = bind_end
+        export_off = _align(bind_end, 8)
         # Keep a minimal trailing string table.  Apple's codesign_allocate
         # expects the final bytes of __LINKEDIT to be owned by a recognized
         # link-edit load command; a dyld export trie alone is not sufficient
