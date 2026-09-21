@@ -79,6 +79,14 @@ jobs:
               _elf_phdr_compat_source(FakeElf()),
               encoding="utf-8",
           )
+          network_template = (
+              Path(shimgen.__file__).with_name("templates")
+              / "network_compat.c"
+          )
+          (out / "network_compat.c").write_text(
+              network_template.read_text(encoding="utf-8"),
+              encoding="utf-8",
+          )
           (out / "build.sh").write_text(BUILD_SH, encoding="utf-8")
           PY
       - name: Build iPhoneOS ARM64 shim
