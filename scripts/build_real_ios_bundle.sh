@@ -28,49 +28,31 @@ cp "$OUT/shim/build/libbionic_shim.dylib" "$OUT/libbionic_shim.dylib"
 
 echo "[4/6] Compiling iPhoneOS host"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -framework UIKit   -framework CoreGraphics   -Wl,-rpath,@executable_path   -o "$OUT/A2IHost"
+xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -framework UIKit   -framework CoreGraphics   -Wl,-rpath,@executable_path/Frameworks   -o "$OUT/A2IHost"
 
 echo "[5/6] Assembling unsigned .app"
 APP="$OUT/A2IHost.app"
 mkdir -p "$APP"
 cp "$OUT/A2IHost" "$APP/A2IHost"
 cp ios_host/Info.plist "$APP/Info.plist"
-cp "$OUT/libbionic_shim.dylib" "$APP/libbionic_shim.dylib"
-cp "$OUT/libil2cpp_ported.dylib" "$APP/libil2cpp_ported.dylib"
+mkdir -p "$APP/Frameworks"
+cp "$OUT/libbionic_shim.dylib" "$APP/Frameworks/libbionic_shim.dylib"
+cp "$OUT/libil2cpp_ported.dylib" "$APP/Frameworks/libil2cpp_ported.dylib"
 
-# Keep probe dylibs at the app root so IPA resigners do not eagerly treat the
-# translated runtime as a launch-time embedded framework.  Pre-sign both files
-# here; the host dlopens them only after UIKit is alive.
-codesign --force --sign - --timestamp=none --no-strict "$APP/libbionic_shim.dylib"
+# Deliberately leave both embedded dylibs unsigned here.  The IPA itself is
+# unsigned, so the user's IPA signer must sign the app executable and every
+# Mach-O under Frameworks with the same identity.  Keeping them in Frameworks
+# makes recursive resigners discover them instead of treating them as opaque
+# bundle resources.
 
-# Normalize the hand-built Mach-O through LIEF before signing.  llvm/dyld
-# accept the raw translator output, but Apple's codesign is stricter about
-# load-command/linkedit layout.  Re-emitting it gives us a normal Mach-O that
-# Apple's signer can process and that third-party IPA resigners can replace.
-python3 -m pip install --disable-pip-version-check lief
-python3 - "$APP/libil2cpp_ported.dylib" <<'PY'
-import os, sys, lief
-src = sys.argv[1]
-dst = src + ".normalized"
-binary = lief.parse(src)
-if binary is None:
-    raise SystemExit("LIEF failed to parse translated Mach-O")
-binary.write(dst)
-os.replace(dst, src)
-PY
-
-codesign --force --sign - --timestamp=none "$APP/libil2cpp_ported.dylib"
-codesign --verify --strict --verbose=4 "$APP/libbionic_shim.dylib"
-codesign --verify --strict --verbose=4 "$APP/libil2cpp_ported.dylib"
-codesign --display --verbose=4 "$APP/libil2cpp_ported.dylib"
 if [ -f "$OUT/extracted/global-metadata.dat" ]; then
   cp "$OUT/extracted/global-metadata.dat" "$APP/global-metadata.dat"
 fi
 
 echo "[6/6] Structural validation"
-file "$APP/A2IHost" "$APP/libbionic_shim.dylib" "$APP/libil2cpp_ported.dylib"
-xcrun llvm-objdump --macho --exports-trie "$APP/libil2cpp_ported.dylib"   | grep -E 'il2cpp_init|il2cpp_shutdown' || true
-xcrun llvm-objdump --macho --bind "$APP/libil2cpp_ported.dylib"   > "$OUT/ported-bind.txt"
+file "$APP/A2IHost" "$APP/Frameworks/libbionic_shim.dylib" "$APP/Frameworks/libil2cpp_ported.dylib"
+xcrun llvm-objdump --macho --exports-trie "$APP/Frameworks/libil2cpp_ported.dylib"   | grep -E 'il2cpp_init|il2cpp_shutdown' || true
+xcrun llvm-objdump --macho --bind "$APP/Frameworks/libil2cpp_ported.dylib"   > "$OUT/ported-bind.txt"
 plutil -lint "$APP/Info.plist"
 
 echo
