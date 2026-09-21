@@ -1,0 +1,63 @@
+name: real-apk-ios-bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_url:
+        description: "Direct HTTPS URL to the APK (avoid sensitive URLs on a public repo)"
+        required: true
+        type: string
+      apk_sha256:
+        description: "Optional expected SHA-256"
+        required: false
+        type: string
+
+jobs:
+  build-real-bundle:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download APK
+        env:
+          APK_URL: ${{ inputs.apk_url }}
+          APK_SHA256: ${{ inputs.apk_sha256 }}
+        run: |
+          set -eu
+          case "$APK_URL" in
+            https://*) ;;
+            *) echo "apk_url must use HTTPS" >&2; exit 2 ;;
+          esac
+          curl --fail --location --retry 3 --output target.apk "$APK_URL"
+          ACTUAL="$(shasum -a 256 target.apk | awk '{print $1}')"
+          echo "APK sha256=$ACTUAL"
+          if [ -n "$APK_SHA256" ] && [ "$ACTUAL" != "$APK_SHA256" ]; then
+            echo "SHA-256 mismatch" >&2
+            exit 3
+          fi
+
+      - name: Build real translated iOS bundle
+        run: |
+          sh scripts/build_real_ios_bundle.sh "$PWD/target.apk" "$PWD/work-real"
+
+      - name: Package unsigned app
+        run: |
+          ditto -c -k --keepParent             work-real/A2IHost.app             A2IHost-unsigned.zip
+
+      - name: Upload reports and unsigned app
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-apk-ios-probe
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            A2IHost-unsigned.zip
+            work-real/phase4-report.json
+            work-real/shim-report.json
+            work-real/ported-bind.txt
