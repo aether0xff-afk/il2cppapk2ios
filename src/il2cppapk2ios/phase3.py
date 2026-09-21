@@ -513,7 +513,8 @@ class Phase3Translator:
 
         linkedit_fileoff = _align(len(image), self.page_size)
         rebase_off = linkedit_fileoff
-        bind_off = _align(rebase_off + len(rebase_stream), 8)
+        # Keep __LINKEDIT payloads byte-contiguous for modern codesign.
+        bind_off = rebase_off + len(rebase_stream)
         linkedit_size = (
             bind_off - linkedit_fileoff
             + len(bind_stream)
