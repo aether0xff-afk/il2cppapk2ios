@@ -116,6 +116,15 @@ PTHREAD_SYMBOLS = {
     "pthread_setspecific",
 }
 
+STDIO_SYMBOLS = {
+    "fclose",
+    "fileno",
+    "fputc",
+    "fputs",
+    "fscanf",
+    "fwrite",
+}
+
 OBJECT_SYMBOLS = {"__sF", "_ctype_"}
 TYPE_NAMES = {0: "notype", 1: "object", 2: "func"}
 
@@ -293,18 +302,7 @@ void a2i___google_potentially_blocking_region_end(void) {}
 """
 
 
-OBJECTS_ASM = r""".data
-.p2align 4
-
-// Link-only placeholders. These are NOT semantic Bionic implementations.
-
-.globl _a2i___sF
-_a2i___sF:
-    .zero 4096
-
-.globl _a2i__ctype_
-_a2i__ctype_:
-    .zero 4096
+OBJECTS_ASM = r"""// Object shims are implemented in objects_compat.c.
 """
 
 
@@ -326,6 +324,8 @@ xcrun --sdk iphoneos clang \
   "$ROOT/direct.S" \
   "$ROOT/trap.S" \
   "$ROOT/objects.S" \
+  "$ROOT/objects_compat.c" \
+  "$ROOT/stdio_compat.c" \
   "$ROOT/special.c" \
   "$ROOT/pthread_compat.c" \
   "$ROOT/posix_compat.c" \
@@ -346,7 +346,8 @@ Categories:
 
 - direct: conservative ARM64 tail calls to the Darwin symbol with the same C name.
 - special: hand-written adapters in special.c.
-- object: exported placeholder storage only; semantics are not implemented.
+- object: Bionic _ctype_ table pointer and legacy __sF[3] storage.
+- stdio: maps legacy __sF slots to Darwin stdin/stdout/stderr.
 - pthread: Android-sized pthread objects mapped to native Darwin pthread objects.
 - posix: translated Android stat/open/mmap/dirent/semaphore/uname ABI.
 - elf-runtime: synthetic ELF program-header view for the translated image.
@@ -461,6 +462,8 @@ def generate_shim_scaffold(
         elf_type = imports[name]["elf_type"]
         if name in OBJECT_SYMBOLS or elf_type == "object":
             category = "object"
+        elif name in STDIO_SYMBOLS:
+            category = "stdio"
         elif name in SPECIAL_SYMBOLS:
             category = "special"
         elif name in PTHREAD_SYMBOLS:
@@ -501,6 +504,20 @@ def generate_shim_scaffold(
     )
     (output_dir / "objects.S").write_text(
         OBJECTS_ASM, encoding="utf-8"
+    )
+    objects_template = (
+        Path(__file__).with_name("templates") / "objects_compat.c"
+    )
+    stdio_template = (
+        Path(__file__).with_name("templates") / "stdio_compat.c"
+    )
+    (output_dir / "objects_compat.c").write_text(
+        objects_template.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (output_dir / "stdio_compat.c").write_text(
+        stdio_template.read_text(encoding="utf-8"),
+        encoding="utf-8",
     )
     (output_dir / "special.c").write_text(
         SPECIAL_C, encoding="utf-8"
