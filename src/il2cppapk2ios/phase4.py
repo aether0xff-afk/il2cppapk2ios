@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 import math
 import struct
@@ -307,16 +307,33 @@ class Phase4Translator(Phase3Translator):
 
         commands: list[bytes] = []
         from .phase3 import _segment_with_data_section
-        for seg in self.segments:
+
+        # codesign/libstuff require file-backed Mach-O segments to be
+        # contiguous: seg.fileoff + seg.filesize == next.fileoff.  The ELF
+        # layout intentionally has alignment gaps, so represent those zero
+        # padding bytes as part of the preceding Mach-O segment.  Do the same
+        # for VM ranges; the actual ELF payload section remains unchanged.
+        command_segments: list[ImageSegment] = []
+        for index, seg in enumerate(self.segments):
+            if index + 1 < len(self.segments):
+                next_fileoff = self.segments[index + 1].fileoff
+                next_vmaddr = self.segments[index + 1].vmaddr
+            else:
+                next_fileoff = linkedit_fileoff
+                next_vmaddr = linkedit_vmaddr
+            command_segments.append(
+                replace(
+                    seg,
+                    filesize=next_fileoff - seg.fileoff,
+                    vmsize=next_vmaddr - seg.vmaddr,
+                )
+            )
+
+        for seg in command_segments:
             # Classic dyld rebase/bind offsets may target any byte in the
             # original PT_LOAD, including padding/GOT locations outside the
             # handful of named ELF sections exposed below.  Keep one section
             # spanning the complete file-backed PT_LOAD for dyld validation.
-            #
-            # Phase 4's named sections are descriptive only; overlapping them
-            # with the catch-all section makes llvm's bind validator reject
-            # otherwise valid locations.  Until we partition the PT_LOAD into
-            # non-overlapping Mach-O sections, prefer the complete section.
             commands.append(_segment_with_data_section(seg))
 
         commands.append(
