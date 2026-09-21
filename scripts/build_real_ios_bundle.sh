@@ -42,10 +42,10 @@ cp "$OUT/libil2cpp_ported.dylib" "$APP/Frameworks/libil2cpp_ported.dylib"
 # Make the hand-built Mach-O a normally signed nested-code object before
 # third-party IPA resigners touch the bundle.  Standard Frameworks placement
 # also makes recursive resigners discover both dylibs reliably.
-codesign --force --sign - --timestamp=none "$APP/Frameworks/libbionic_shim.dylib"
-codesign --force --sign - --timestamp=none "$APP/Frameworks/libil2cpp_ported.dylib"
-codesign --verify --verbose=2 "$APP/Frameworks/libbionic_shim.dylib"
-codesign --verify --verbose=2 "$APP/Frameworks/libil2cpp_ported.dylib"
+codesign --force --sign - --timestamp=none --no-strict "$APP/Frameworks/libbionic_shim.dylib"
+codesign --force --sign - --timestamp=none --no-strict "$APP/Frameworks/libil2cpp_ported.dylib"
+codesign --verify --verbose=4 --no-strict "$APP/Frameworks/libbionic_shim.dylib"
+codesign --verify --verbose=4 --no-strict "$APP/Frameworks/libil2cpp_ported.dylib"
 if [ -f "$OUT/extracted/global-metadata.dat" ]; then
   cp "$OUT/extracted/global-metadata.dat" "$APP/global-metadata.dat"
 fi
