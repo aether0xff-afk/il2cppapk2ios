@@ -55,7 +55,16 @@ POSIX_SYMBOLS = {
     "uname",
 }
 
-ELF_RUNTIME_SYMBOLS = {
+ELF_SIGNAL_SYMBOLS = {
+    "sigaction",
+    "sigdelset",
+    "sigfillset",
+    "signal",
+    "sigsuspend",
+    "tgkill",
+}
+
+RUNTIME_SYMBOLS = {
     "dl_iterate_phdr",
 }
 
@@ -324,6 +333,7 @@ xcrun --sdk iphoneos clang \
   "$ROOT/network_compat.c" \
   "$ROOT/runtime_compat.c" \
   "$ROOT/runtime_compat.S" \
+  "$ROOT/signal_compat.c" \
   -o "$OUT/libbionic_shim.dylib"
 
 echo "$OUT/libbionic_shim.dylib"
@@ -342,6 +352,7 @@ Categories:
 - elf-runtime: synthetic ELF program-header view for the translated image.
 - network: Linux/Android socket-address, option, resolver, and ioctl translation.
 - runtime: target-specific AArch64 setjmp spill and Linux futex syscall emulation.
+- signal: Android signal numbers, sigset, and sigaction translation.
 - trap: fail-fast stubs that print the symbol if reached.
 
 Build on macOS with Xcode by running: sh build.sh
@@ -462,6 +473,8 @@ def generate_shim_scaffold(
             category = "network"
         elif name in RUNTIME_SYMBOLS:
             category = "runtime"
+        elif name in SIGNAL_SYMBOLS:
+            category = "signal"
         elif name in DIRECT_SYMBOLS and elf_type in {"func", "notype"}:
             category = "direct"
         else:
@@ -529,6 +542,13 @@ def generate_shim_scaffold(
     )
     (output_dir / "runtime_compat.S").write_text(
         runtime_s.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    signal_template = (
+        Path(__file__).with_name("templates") / "signal_compat.c"
+    )
+    (output_dir / "signal_compat.c").write_text(
+        signal_template.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     (output_dir / "build.sh").write_text(
