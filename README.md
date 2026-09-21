@@ -96,9 +96,10 @@ Mach-O parser accepts the complete rebase and bind tables.
 The current generated shim classifies the 188 imports as:
 
 - 79 conservative direct Darwin tail-calls
-- 6 hand-written special adapters
+- 8 hand-written special adapters, including Android clock-id translation
+- 28 pthread imports handled by an Android-sized-object -> Darwin pthread bridge
 - 2 Bionic object symbols that still need real semantics: _ctype_ and __sF
-- 101 fail-fast trap stubs that still require ABI/semantic adapters
+- 71 fail-fast trap stubs that still require ABI/semantic adapters
 
 Trap stubs are intentional: an unsupported API should fail at the exact import
 name rather than silently corrupting Android data structures on Darwin.
@@ -130,7 +131,7 @@ libil2cpp.so is an AArch64 ET_DYN ELF. Its relocation set uses R_AARCH64_RELATIV
 2. Phase 1.5 — Mach-O writer smoke binary ✅
 3. Phase 2 — translate loadable segments + statically resolvable relocations ✅
 4. Phase 3A — Mach-O dyld rebase/bind translation ✅
-5. Phase 3B — generated Bionic shim scaffold ✅; semantic adapters in progress
+5. Phase 3B — generated Bionic shim + pthread/clock bridge ✅; remaining semantic adapters in progress
 6. Phase 4 — constructors, unwind metadata, IL2CPP initialization + global-metadata.dat
 7. Phase 5 — Unity player strategy
 8. Phase 6 — signing, IPA packaging, real-device test
