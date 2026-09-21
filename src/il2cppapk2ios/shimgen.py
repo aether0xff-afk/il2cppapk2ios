@@ -20,6 +20,13 @@ DIRECT_SYMBOLS = {
     "strtold", "strtoul", "strxfrm", "tan", "time", "tolower", "towlower",
     "towupper", "unlink", "unsetenv", "usleep", "wcslen", "wmemchr",
     "wmemcpy", "wmemmove", "wmemset", "write",
+    "btowc", "clock", "closedir", "dladdr", "dlclose", "fclose", "fileno",
+    "fopen", "fputc", "fputs", "fscanf", "ftruncate", "fwrite", "gmtime",
+    "inet_ntop", "inet_pton", "iswctype", "localtime", "mbrtowc", "mkdir",
+    "mktime", "mprotect", "munmap", "opendir", "send", "setlocale",
+    "shutdown", "sprintf", "strerror", "strftime", "sysconf", "vsnprintf",
+    "vsprintf", "wcrtomb", "wcscoll", "wcsftime", "wcsxfrm", "wctob",
+    "wctype", "writev",
 }
 
 SPECIAL_SYMBOLS = {
@@ -31,6 +38,25 @@ SPECIAL_SYMBOLS = {
     "clock_gettime",
     "gettid",
     "memalign",
+}
+
+POSIX_SYMBOLS = {
+    "__ctype_get_mb_cur_max",
+    "fstat",
+    "lstat",
+    "mmap",
+    "open",
+    "readdir",
+    "sem_getvalue",
+    "sem_init",
+    "sem_post",
+    "sem_wait",
+    "stat",
+    "uname",
+}
+
+ELF_RUNTIME_SYMBOLS = {
+    "dl_iterate_phdr",
 }
 
 PTHREAD_SYMBOLS = {
@@ -276,6 +302,8 @@ xcrun --sdk iphoneos clang \
   "$ROOT/objects.S" \
   "$ROOT/special.c" \
   "$ROOT/pthread_compat.c" \
+  "$ROOT/posix_compat.c" \
+  "$ROOT/elf_phdr_compat.c" \
   -o "$OUT/libbionic_shim.dylib"
 
 echo "$OUT/libbionic_shim.dylib"
@@ -290,11 +318,87 @@ Categories:
 - special: hand-written adapters in special.c.
 - object: exported placeholder storage only; semantics are not implemented.
 - pthread: Android-sized pthread objects mapped to native Darwin pthread objects.
+- posix: translated Android stat/open/mmap/dirent/semaphore/uname ABI.
+- elf-runtime: synthetic ELF program-header view for the translated image.
 - trap: fail-fast stubs that print the symbol if reached.
 
 Build on macOS with Xcode by running: sh build.sh
 
 This is a link/runtime-probing scaffold, not a complete compatibility layer.
+"""
+
+
+
+def _elf_phdr_compat_source(elf: Elf64) -> str:
+    entries = []
+    for ph in elf.program_headers:
+        entries.append(
+            "    {"
+            f"{ph.p_type}u, {ph.flags}u, "
+            f"0x{ph.offset:x}ULL, 0x{ph.vaddr:x}ULL, 0x{ph.vaddr:x}ULL, "
+            f"0x{ph.filesz:x}ULL, 0x{ph.memsz:x}ULL, 0x{ph.align:x}ULL"
+            "},"
+        )
+
+    phdrs = "\n".join(entries)
+    return f"""#include <dlfcn.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
+typedef struct {{
+    uint32_t p_type;
+    uint32_t p_flags;
+    uint64_t p_offset;
+    uint64_t p_vaddr;
+    uint64_t p_paddr;
+    uint64_t p_filesz;
+    uint64_t p_memsz;
+    uint64_t p_align;
+}} a2i_elf64_phdr;
+
+typedef struct {{
+    uintptr_t dlpi_addr;
+    const char *dlpi_name;
+    const a2i_elf64_phdr *dlpi_phdr;
+    uint16_t dlpi_phnum;
+    uint16_t _pad0;
+    uint32_t _pad1;
+    uint64_t dlpi_adds;
+    uint64_t dlpi_subs;
+    size_t dlpi_tls_modid;
+    void *dlpi_tls_data;
+}} a2i_dl_phdr_info;
+
+static const a2i_elf64_phdr k_original_phdrs[] = {{
+{phdrs}
+}};
+
+int a2i_dl_iterate_phdr(
+    int (*callback)(a2i_dl_phdr_info *, size_t, void *),
+    void *data
+) {{
+    if (callback == NULL) {{
+        return 0;
+    }}
+
+    Dl_info image = {{0}};
+    void *caller = __builtin_return_address(0);
+    if (dladdr(caller, &image) == 0 || image.dli_fbase == NULL) {{
+        return 0;
+    }}
+
+    a2i_dl_phdr_info info;
+    memset(&info, 0, sizeof(info));
+    info.dlpi_addr = (uintptr_t)image.dli_fbase + 0x10000ULL;
+    info.dlpi_name = image.dli_fname ? image.dli_fname : "";
+    info.dlpi_phdr = k_original_phdrs;
+    info.dlpi_phnum = (uint16_t)(
+        sizeof(k_original_phdrs) / sizeof(k_original_phdrs[0])
+    );
+
+    return callback(&info, sizeof(info), data);
+}}
 """
 
 
@@ -328,6 +432,10 @@ def generate_shim_scaffold(
             category = "special"
         elif name in PTHREAD_SYMBOLS:
             category = "pthread"
+        elif name in POSIX_SYMBOLS:
+            category = "posix"
+        elif name in ELF_RUNTIME_SYMBOLS:
+            category = "elf-runtime"
         elif name in DIRECT_SYMBOLS and elf_type in {"func", "notype"}:
             category = "direct"
         else:
@@ -363,6 +471,17 @@ def generate_shim_scaffold(
     )
     (output_dir / "pthread_compat.c").write_text(
         template.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    posix_template = (
+        Path(__file__).with_name("templates") / "posix_compat.c"
+    )
+    (output_dir / "posix_compat.c").write_text(
+        posix_template.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (output_dir / "elf_phdr_compat.c").write_text(
+        _elf_phdr_compat_source(elf),
         encoding="utf-8",
     )
     (output_dir / "build.sh").write_text(
