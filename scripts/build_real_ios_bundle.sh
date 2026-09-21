@@ -28,7 +28,7 @@ cp "$OUT/shim/build/libbionic_shim.dylib" "$OUT/libbionic_shim.dylib"
 
 echo "[4/6] Compiling iPhoneOS host"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -Wl,-rpath,@executable_path   -o "$OUT/A2IHost"
+xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -framework UIKit   -Wl,-rpath,@executable_path   -o "$OUT/A2IHost"
 
 echo "[5/6] Assembling unsigned .app"
 APP="$OUT/A2IHost.app"
