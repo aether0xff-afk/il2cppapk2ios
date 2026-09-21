@@ -43,17 +43,26 @@ cp "$OUT/libil2cpp_ported.dylib" "$APP/libil2cpp_ported.dylib"
 # here; the host dlopens them only after UIKit is alive.
 codesign --force --sign - --timestamp=none --no-strict "$APP/libbionic_shim.dylib"
 
-# Apple's codesign_allocate still rejects the translated image even though
-# dyld/llvm accept it.  ldid can emit an ad-hoc SuperBlob for non-ld64 Mach-O
-# images and, more importantly, leaves a real LC_CODE_SIGNATURE for IPA
-# resigners to replace in-place.
-if ! command -v ldid >/dev/null 2>&1; then
-  brew install ldid
-fi
-ldid -S "$APP/libil2cpp_ported.dylib"
+# Normalize the hand-built Mach-O through LIEF before signing.  llvm/dyld
+# accept the raw translator output, but Apple's codesign is stricter about
+# load-command/linkedit layout.  Re-emitting it gives us a normal Mach-O that
+# Apple's signer can process and that third-party IPA resigners can replace.
+python3 -m pip install --disable-pip-version-check lief
+python3 - "$APP/libil2cpp_ported.dylib" <<'PY'
+import os, sys, lief
+src = sys.argv[1]
+dst = src + ".normalized"
+binary = lief.parse(src)
+if binary is None:
+    raise SystemExit("LIEF failed to parse translated Mach-O")
+binary.write(dst)
+os.replace(dst, src)
+PY
 
-codesign --display --verbose=4 "$APP/libbionic_shim.dylib" || true
-codesign --display --verbose=4 "$APP/libil2cpp_ported.dylib" || true
+codesign --force --sign - --timestamp=none "$APP/libil2cpp_ported.dylib"
+codesign --verify --strict --verbose=4 "$APP/libbionic_shim.dylib"
+codesign --verify --strict --verbose=4 "$APP/libil2cpp_ported.dylib"
+codesign --display --verbose=4 "$APP/libil2cpp_ported.dylib"
 if [ -f "$OUT/extracted/global-metadata.dat" ]; then
   cp "$OUT/extracted/global-metadata.dat" "$APP/global-metadata.dat"
 fi
