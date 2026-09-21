@@ -16,3 +16,44 @@ jobs:
       - run: python -m pip install -e . pytest
       - run: python -m compileall -q src
       - run: pytest -q
+
+  ios-shim-smoke:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .
+      - name: Generate minimal shim sources
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from il2cppapk2ios.shimgen import (
+              _direct_assembly,
+              _trap_assembly,
+              SPECIAL_C,
+              OBJECTS_ASM,
+              BUILD_SH,
+          )
+
+          out = Path("shim-smoke")
+          out.mkdir()
+          (out / "direct.S").write_text(
+              _direct_assembly(["malloc", "strlen"]),
+              encoding="utf-8",
+          )
+          (out / "trap.S").write_text(
+              _trap_assembly(["open"]),
+              encoding="utf-8",
+          )
+          (out / "objects.S").write_text(OBJECTS_ASM, encoding="utf-8")
+          (out / "special.c").write_text(SPECIAL_C, encoding="utf-8")
+          (out / "build.sh").write_text(BUILD_SH, encoding="utf-8")
+          PY
+      - name: Build iPhoneOS ARM64 shim
+        run: sh shim-smoke/build.sh
+      - name: Inspect Mach-O
+        run: |
+          file shim-smoke/build/libbionic_shim.dylib
+          xcrun llvm-objdump --macho --private-headers shim-smoke/build/libbionic_shim.dylib
