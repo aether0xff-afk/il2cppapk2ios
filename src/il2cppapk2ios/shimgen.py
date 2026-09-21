@@ -476,7 +476,7 @@ def generate_shim_scaffold(
             category = "network"
         elif name in RUNTIME_SYMBOLS:
             category = "runtime"
-        elif name in SIGNAL_SYMBOLS:
+        elif name in ELF_SIGNAL_SYMBOLS:
             category = "signal"
         elif name in DIRECT_SYMBOLS and elf_type in {"func", "notype"}:
             category = "direct"
