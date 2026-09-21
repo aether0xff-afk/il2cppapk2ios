@@ -16,11 +16,13 @@ Implemented:
 - generation of a tiny **unsigned ARM64 iOS Mach-O smoke executable**
 - Phase 2 PT_LOAD -> Mach-O segment mapping with one constant virtual-address slide
 - AOT application of R_AARCH64_RELATIVE and defined-symbol ABS64/GLOB_DAT/JUMP_SLOT relocations
+- Phase 3 Mach-O dyld rebase/bind tables for ASLR-safe pointers and external imports
+- automatic Bionic-to-Darwin shim scaffold generation from the target ELF
 
 Not implemented yet:
 
-- external import thunk/bind metadata for the remaining undefined symbols
-- Bionic -> Darwin ABI shims
+- semantic Bionic -> Darwin adapters for pthread/stat/socket/stdio/etc.
+- real implementations for Bionic object imports (__sF and _ctype_)
 - JNI bridge
 - Unity Android player -> iOS graphics/input/audio bridge
 - code signing / IPA packaging
@@ -70,6 +72,37 @@ On Windows, the target flow is reproducible with:
 .\scripts\squadstrike_phase2.ps1 -Apk "C:\path\to\game.apk"
 ```
 
+## Phase 3: dyld rebase/bind + shim scaffold
+
+Phase 3 converts all statically-known pointers into Mach-O dyld rebase entries,
+so iOS ASLR can slide them. Undefined Android imports are emitted as dyld binds
+against @rpath/libbionic_shim.dylib.
+
+```bash
+il2cppapk2ios translate-phase3 work/libil2cpp.so work/libil2cpp-phase3.dylib --json
+il2cppapk2ios generate-shim work/libil2cpp.so work/shim --json
+```
+
+On macOS with Xcode, the generated shim scaffold can then be built with:
+
+```bash
+sh work/shim/build.sh
+```
+
+For Squad Strike 3 2.1, the translated dylib contains **86,486 dyld rebase
+entries** and **195 bind entries** targeting **188 unique imports**. LLVM's
+Mach-O parser accepts the complete rebase and bind tables.
+
+The current generated shim classifies the 188 imports as:
+
+- 79 conservative direct Darwin tail-calls
+- 6 hand-written special adapters
+- 2 Bionic object symbols that still need real semantics: _ctype_ and __sF
+- 101 fail-fast trap stubs that still require ABI/semantic adapters
+
+Trap stubs are intentional: an unsupported API should fail at the exact import
+name rather than silently corrupting Android data structures on Darwin.
+
 ## Mach-O writer smoke test
 
 ```bash
@@ -96,10 +129,11 @@ libil2cpp.so is an AArch64 ET_DYN ELF. Its relocation set uses R_AARCH64_RELATIV
 1. Phase 1 — ELF64/AArch64 parser + reproducible reports ✅
 2. Phase 1.5 — Mach-O writer smoke binary ✅
 3. Phase 2 — translate loadable segments + statically resolvable relocations ✅
-4. Phase 3 — external import thunk/bind table + Darwin/Bionic shims
-5. Phase 4 — IL2CPP initialization + global-metadata.dat
-6. Phase 5 — Unity player strategy
-7. Phase 6 — signing, IPA packaging, real-device test
+4. Phase 3A — Mach-O dyld rebase/bind translation ✅
+5. Phase 3B — generated Bionic shim scaffold ✅; semantic adapters in progress
+6. Phase 4 — constructors, unwind metadata, IL2CPP initialization + global-metadata.dat
+7. Phase 5 — Unity player strategy
+8. Phase 6 — signing, IPA packaging, real-device test
 
 ## Prior art
 
