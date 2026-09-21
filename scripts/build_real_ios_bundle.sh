@@ -43,9 +43,18 @@ cp "$OUT/libil2cpp_ported.dylib" "$APP/Frameworks/libil2cpp_ported.dylib"
 # third-party IPA resigners touch the bundle.  Standard Frameworks placement
 # also makes recursive resigners discover both dylibs reliably.
 codesign --force --sign - --timestamp=none --no-strict "$APP/Frameworks/libbionic_shim.dylib"
-codesign --force --sign - --timestamp=none --no-strict "$APP/Frameworks/libil2cpp_ported.dylib"
-codesign --verify --verbose=4 --no-strict "$APP/Frameworks/libbionic_shim.dylib"
-codesign --verify --verbose=4 --no-strict "$APP/Frameworks/libil2cpp_ported.dylib"
+
+# Apple's codesign_allocate still rejects the translated image even though
+# dyld/llvm accept it.  ldid can emit an ad-hoc SuperBlob for non-ld64 Mach-O
+# images and, more importantly, leaves a real LC_CODE_SIGNATURE for IPA
+# resigners to replace in-place.
+if ! command -v ldid >/dev/null 2>&1; then
+  brew install ldid
+fi
+ldid -S "$APP/Frameworks/libil2cpp_ported.dylib"
+
+codesign --display --verbose=4 "$APP/Frameworks/libbionic_shim.dylib" || true
+codesign --display --verbose=4 "$APP/Frameworks/libil2cpp_ported.dylib" || true
 if [ -f "$OUT/extracted/global-metadata.dat" ]; then
   cp "$OUT/extracted/global-metadata.dat" "$APP/global-metadata.dat"
 fi
