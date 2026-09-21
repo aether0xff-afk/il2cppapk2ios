@@ -87,3 +87,31 @@ jobs:
         run: |
           file shim-smoke/build/libbionic_shim.dylib
           xcrun llvm-objdump --macho --private-headers shim-smoke/build/libbionic_shim.dylib
+
+
+  phase4-macho-smoke:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e . pytest
+      - name: Build synthetic Phase 4 dylib
+        run: |
+          python - <<'PY'
+          import runpy
+          from pathlib import Path
+          from il2cppapk2ios.phase4 import Phase4Translator
+
+          ns = runpy.run_path("tests/test_phase4.py")
+          FakeElf = ns["FakeElf"]
+          report = Phase4Translator(FakeElf()).translate("phase4-smoke.dylib")
+          print(report)
+          PY
+      - name: Validate Mach-O exports and sections
+        run: |
+          file phase4-smoke.dylib
+          xcrun llvm-objdump --macho --private-headers phase4-smoke.dylib
+          xcrun llvm-objdump --macho --exports-trie phase4-smoke.dylib
+          xcrun llvm-objdump --macho --section-headers phase4-smoke.dylib
