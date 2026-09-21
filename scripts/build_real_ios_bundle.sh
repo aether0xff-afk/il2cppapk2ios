@@ -28,23 +28,32 @@ cp "$OUT/shim/build/libbionic_shim.dylib" "$OUT/libbionic_shim.dylib"
 
 echo "[4/6] Compiling iPhoneOS host"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -framework UIKit   -framework CoreGraphics   -Wl,-rpath,@executable_path   -o "$OUT/A2IHost"
+xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -framework UIKit   -framework CoreGraphics   -Wl,-rpath,@executable_path/Frameworks   -o "$OUT/A2IHost"
 
 echo "[5/6] Assembling unsigned .app"
 APP="$OUT/A2IHost.app"
 mkdir -p "$APP"
 cp "$OUT/A2IHost" "$APP/A2IHost"
 cp ios_host/Info.plist "$APP/Info.plist"
-cp "$OUT/libbionic_shim.dylib" "$APP/libbionic_shim.dylib"
-cp "$OUT/libil2cpp_ported.dylib" "$APP/libil2cpp_ported.dylib"
+mkdir -p "$APP/Frameworks"
+cp "$OUT/libbionic_shim.dylib" "$APP/Frameworks/libbionic_shim.dylib"
+cp "$OUT/libil2cpp_ported.dylib" "$APP/Frameworks/libil2cpp_ported.dylib"
+
+# Make the hand-built Mach-O a normally signed nested-code object before
+# third-party IPA resigners touch the bundle.  Standard Frameworks placement
+# also makes recursive resigners discover both dylibs reliably.
+codesign --force --sign - --timestamp=none "$APP/Frameworks/libbionic_shim.dylib"
+codesign --force --sign - --timestamp=none "$APP/Frameworks/libil2cpp_ported.dylib"
+codesign --verify --verbose=2 "$APP/Frameworks/libbionic_shim.dylib"
+codesign --verify --verbose=2 "$APP/Frameworks/libil2cpp_ported.dylib"
 if [ -f "$OUT/extracted/global-metadata.dat" ]; then
   cp "$OUT/extracted/global-metadata.dat" "$APP/global-metadata.dat"
 fi
 
 echo "[6/6] Structural validation"
-file "$APP/A2IHost" "$APP/libbionic_shim.dylib" "$APP/libil2cpp_ported.dylib"
-xcrun llvm-objdump --macho --exports-trie "$APP/libil2cpp_ported.dylib"   | grep -E 'il2cpp_init|il2cpp_shutdown' || true
-xcrun llvm-objdump --macho --bind "$APP/libil2cpp_ported.dylib"   > "$OUT/ported-bind.txt"
+file "$APP/A2IHost" "$APP/Frameworks/libbionic_shim.dylib" "$APP/Frameworks/libil2cpp_ported.dylib"
+xcrun llvm-objdump --macho --exports-trie "$APP/Frameworks/libil2cpp_ported.dylib"   | grep -E 'il2cpp_init|il2cpp_shutdown' || true
+xcrun llvm-objdump --macho --bind "$APP/Frameworks/libil2cpp_ported.dylib"   > "$OUT/ported-bind.txt"
 plutil -lint "$APP/Info.plist"
 
 echo
