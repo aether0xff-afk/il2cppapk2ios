@@ -8,6 +8,7 @@ from .elf import Elf64
 from .macho import build_arm64_macho_skeleton
 from .translate import translate_phase2
 from .phase3 import translate_phase3
+from .phase4 import translate_phase4
 from .shimgen import generate_shim_scaffold
 
 
@@ -69,6 +70,22 @@ def main(argv=None) -> int:
         default="@rpath/libil2cpp_ported.dylib",
     )
 
+    phase4 = sub.add_parser(
+        "translate-phase4",
+        help="add Mach-O exports, constructors, and unwind metadata",
+    )
+    phase4.add_argument("elf")
+    phase4.add_argument("output")
+    phase4.add_argument("--json", action="store_true")
+    phase4.add_argument(
+        "--shim-install-name",
+        default="@rpath/libbionic_shim.dylib",
+    )
+    phase4.add_argument(
+        "--install-name",
+        default="@rpath/libil2cpp_ported.dylib",
+    )
+
     shim = sub.add_parser(
         "generate-shim",
         help="generate a Bionic-to-Darwin shim scaffold from ELF imports",
@@ -97,6 +114,14 @@ def main(argv=None) -> int:
         dump(report, args.json)
     elif args.cmd == "translate-phase3":
         report = translate_phase3(
+            args.elf,
+            args.output,
+            shim_install_name=args.shim_install_name,
+            install_name=args.install_name,
+        )
+        dump(report, args.json)
+    elif args.cmd == "translate-phase4":
+        report = translate_phase4(
             args.elf,
             args.output,
             shim_install_name=args.shim_install_name,
