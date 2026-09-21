@@ -47,7 +47,7 @@ jobs:
               encoding="utf-8",
           )
           (out / "trap.S").write_text(
-              _trap_assembly(["setjmp"]),
+              _trap_assembly(["a2i_ci_trap_probe"]),
               encoding="utf-8",
           )
           (out / "objects.S").write_text(OBJECTS_ASM, encoding="utf-8")
