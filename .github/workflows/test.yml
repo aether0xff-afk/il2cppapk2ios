@@ -160,3 +160,27 @@ jobs:
           xcrun llvm-objdump --macho --private-headers phase4-smoke.dylib
           xcrun llvm-objdump --macho --exports-trie phase4-smoke.dylib
           xcrun llvm-objdump --macho --section-headers phase4-smoke.dylib
+
+  ios-host-smoke:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile minimal iPhoneOS host executable
+        run: |
+          SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          xcrun --sdk iphoneos clang \
+            -arch arm64 \
+            -isysroot "$SDK" \
+            -miphoneos-version-min=12.0 \
+            -fobjc-arc \
+            ios_host/main.m \
+            -framework Foundation \
+            -o A2IHost
+      - name: Build unsigned app bundle
+        run: |
+          mkdir -p A2IHost.app
+          cp A2IHost A2IHost.app/A2IHost
+          cp ios_host/Info.plist A2IHost.app/Info.plist
+          file A2IHost.app/A2IHost
+          plutil -lint A2IHost.app/Info.plist
+          xcrun llvm-objdump --macho --private-headers A2IHost.app/A2IHost
