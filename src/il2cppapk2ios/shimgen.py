@@ -64,7 +64,7 @@ ELF_SIGNAL_SYMBOLS = {
     "tgkill",
 }
 
-RUNTIME_SYMBOLS = {
+ELF_RUNTIME_SYMBOLS = {
     "dl_iterate_phdr",
 }
 
