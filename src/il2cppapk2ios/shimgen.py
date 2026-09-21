@@ -26,7 +26,7 @@ DIRECT_SYMBOLS = {
     "mktime", "mprotect", "munmap", "opendir", "send", "setlocale",
     "shutdown", "sprintf", "strerror", "strftime", "sysconf", "vsnprintf",
     "vsprintf", "wcrtomb", "wcscoll", "wcsftime", "wcsxfrm", "wctob",
-    "wctype", "writev",
+    "wctype", "writev", "poll",
 }
 
 SPECIAL_SYMBOLS = {
@@ -57,6 +57,18 @@ POSIX_SYMBOLS = {
 
 ELF_RUNTIME_SYMBOLS = {
     "dl_iterate_phdr",
+}
+
+NETWORK_SYMBOLS = {
+    "connect",
+    "freeaddrinfo",
+    "getaddrinfo",
+    "getnameinfo",
+    "getsockopt",
+    "ioctl",
+    "recvfrom",
+    "setsockopt",
+    "socket",
 }
 
 PTHREAD_SYMBOLS = {
@@ -304,6 +316,7 @@ xcrun --sdk iphoneos clang \
   "$ROOT/pthread_compat.c" \
   "$ROOT/posix_compat.c" \
   "$ROOT/elf_phdr_compat.c" \
+  "$ROOT/network_compat.c" \
   -o "$OUT/libbionic_shim.dylib"
 
 echo "$OUT/libbionic_shim.dylib"
@@ -320,6 +333,7 @@ Categories:
 - pthread: Android-sized pthread objects mapped to native Darwin pthread objects.
 - posix: translated Android stat/open/mmap/dirent/semaphore/uname ABI.
 - elf-runtime: synthetic ELF program-header view for the translated image.
+- network: Linux/Android socket-address, option, resolver, and ioctl translation.
 - trap: fail-fast stubs that print the symbol if reached.
 
 Build on macOS with Xcode by running: sh build.sh
@@ -436,6 +450,8 @@ def generate_shim_scaffold(
             category = "posix"
         elif name in ELF_RUNTIME_SYMBOLS:
             category = "elf-runtime"
+        elif name in NETWORK_SYMBOLS:
+            category = "network"
         elif name in DIRECT_SYMBOLS and elf_type in {"func", "notype"}:
             category = "direct"
         else:
@@ -482,6 +498,13 @@ def generate_shim_scaffold(
     )
     (output_dir / "elf_phdr_compat.c").write_text(
         _elf_phdr_compat_source(elf),
+        encoding="utf-8",
+    )
+    network_template = (
+        Path(__file__).with_name("templates") / "network_compat.c"
+    )
+    (output_dir / "network_compat.c").write_text(
+        network_template.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     (output_dir / "build.sh").write_text(
