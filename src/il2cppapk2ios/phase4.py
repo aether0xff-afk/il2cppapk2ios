@@ -303,12 +303,18 @@ class Phase4Translator(Phase3Translator):
 
         commands: list[bytes] = []
         for seg in self.segments:
-            commands.append(
-                _segment_with_sections(
-                    seg,
-                    self._special_sections(seg),
+            special = self._special_sections(seg)
+            if special:
+                commands.append(
+                    _segment_with_sections(seg, special)
                 )
-            )
+            else:
+                # Keep Phase 3's real file-backed section for segments that do
+                # not have named Phase 4 sections.  dyld/llvm validate classic
+                # bind offsets against section ranges, so a zero-sized
+                # __segstart sentinel alone is not sufficient.
+                from .phase3 import _segment_with_data_section
+                commands.append(_segment_with_data_section(seg))
 
         commands.append(
             _segment_no_sections(
