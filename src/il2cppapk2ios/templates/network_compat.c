@@ -369,6 +369,8 @@ static int a2i_android_eai(int host_error) {
     }
 }
 
+void a2i_freeaddrinfo(a2i_addrinfo *item);
+
 int a2i_getaddrinfo(
     const char *node,
     const char *service,
