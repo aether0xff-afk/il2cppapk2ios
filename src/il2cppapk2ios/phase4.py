@@ -279,15 +279,12 @@ class Phase4Translator(Phase3Translator):
                 pass
 
         rebase_off = int(report["linkedit"]["fileoff"], 16)
-        bind_off = _align(
-            rebase_off + report["rebase_stream_size"],
-            8,
-        )
+        bind_off = rebase_off + report["rebase_stream_size"]
         bind_end = bind_off + report["bind_stream_size"]
 
         exports = self._exports()
         export_stream = _build_export_trie(exports)
-        export_off = _align(bind_end, 8)
+        export_off = bind_end
         linkedit_fileoff = rebase_off
         linkedit_size = export_off - linkedit_fileoff + len(export_stream)
 
