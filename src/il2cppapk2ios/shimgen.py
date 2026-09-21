@@ -27,8 +27,41 @@ SPECIAL_SYMBOLS = {
     "__google_potentially_blocking_region_begin",
     "__google_potentially_blocking_region_end",
     "__system_property_get",
+    "clock_getres",
+    "clock_gettime",
     "gettid",
     "memalign",
+}
+
+PTHREAD_SYMBOLS = {
+    "pthread_attr_destroy",
+    "pthread_attr_getstack",
+    "pthread_attr_init",
+    "pthread_cond_broadcast",
+    "pthread_cond_destroy",
+    "pthread_cond_init",
+    "pthread_cond_signal",
+    "pthread_cond_timedwait",
+    "pthread_cond_wait",
+    "pthread_condattr_destroy",
+    "pthread_condattr_init",
+    "pthread_condattr_setclock",
+    "pthread_create",
+    "pthread_detach",
+    "pthread_getattr_np",
+    "pthread_getspecific",
+    "pthread_key_create",
+    "pthread_key_delete",
+    "pthread_mutex_destroy",
+    "pthread_mutex_init",
+    "pthread_mutex_lock",
+    "pthread_mutex_unlock",
+    "pthread_mutexattr_destroy",
+    "pthread_mutexattr_init",
+    "pthread_mutexattr_settype",
+    "pthread_once",
+    "pthread_self",
+    "pthread_setspecific",
 }
 
 OBJECT_SYMBOLS = {"__sF", "_ctype_"}
@@ -135,6 +168,55 @@ int a2i___system_property_get(const char *name, char *value) {
     return (int)len;
 }
 
+static int a2i_host_clock(int android_clock) {
+    switch (android_clock) {
+        case 0:
+            return CLOCK_REALTIME;
+        case 1:
+            return CLOCK_MONOTONIC;
+#ifdef CLOCK_PROCESS_CPUTIME_ID
+        case 2:
+            return CLOCK_PROCESS_CPUTIME_ID;
+#endif
+#ifdef CLOCK_THREAD_CPUTIME_ID
+        case 3:
+            return CLOCK_THREAD_CPUTIME_ID;
+#endif
+#ifdef CLOCK_MONOTONIC_RAW
+        case 4:
+            return CLOCK_MONOTONIC_RAW;
+#endif
+        case 5:
+            return CLOCK_REALTIME;
+        case 6:
+            return CLOCK_MONOTONIC;
+#ifdef CLOCK_UPTIME_RAW
+        case 7:
+            return CLOCK_UPTIME_RAW;
+#endif
+        default:
+            return -1;
+    }
+}
+
+int a2i_clock_gettime(int android_clock, struct timespec *value) {
+    int host_clock = a2i_host_clock(android_clock);
+    if (host_clock < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return clock_gettime((clockid_t)host_clock, value);
+}
+
+int a2i_clock_getres(int android_clock, struct timespec *value) {
+    int host_clock = a2i_host_clock(android_clock);
+    if (host_clock < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return clock_getres((clockid_t)host_clock, value);
+}
+
 int a2i_gettid(void) {
     uint64_t tid = 0;
     if (pthread_threadid_np(NULL, &tid) != 0) {
@@ -192,6 +274,7 @@ xcrun --sdk iphoneos clang \
   "$ROOT/trap.S" \
   "$ROOT/objects.S" \
   "$ROOT/special.c" \
+  "$ROOT/pthread_compat.c" \
   -o "$OUT/libbionic_shim.dylib"
 
 echo "$OUT/libbionic_shim.dylib"
@@ -205,6 +288,7 @@ Categories:
 - direct: conservative ARM64 tail calls to the Darwin symbol with the same C name.
 - special: hand-written adapters in special.c.
 - object: exported placeholder storage only; semantics are not implemented.
+- pthread: Android-sized pthread objects mapped to native Darwin pthread objects.
 - trap: fail-fast stubs that print the symbol if reached.
 
 Build on macOS with Xcode by running: sh build.sh
@@ -241,6 +325,8 @@ def generate_shim_scaffold(
             category = "object"
         elif name in SPECIAL_SYMBOLS:
             category = "special"
+        elif name in PTHREAD_SYMBOLS:
+            category = "pthread"
         elif name in DIRECT_SYMBOLS and elf_type in {"func", "notype"}:
             category = "direct"
         else:
@@ -270,6 +356,13 @@ def generate_shim_scaffold(
     )
     (output_dir / "special.c").write_text(
         SPECIAL_C, encoding="utf-8"
+    )
+    template = (
+        Path(__file__).with_name("templates") / "pthread_compat.c"
+    )
+    (output_dir / "pthread_compat.c").write_text(
+        template.read_text(encoding="utf-8"),
+        encoding="utf-8",
     )
     (output_dir / "build.sh").write_text(
         BUILD_SH, encoding="utf-8"
