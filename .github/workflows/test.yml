@@ -87,6 +87,27 @@ jobs:
               network_template.read_text(encoding="utf-8"),
               encoding="utf-8",
           )
+          runtime_c = (
+              Path(shimgen.__file__).with_name("templates")
+              / "runtime_compat.c"
+          )
+          runtime_s = (
+              Path(shimgen.__file__).with_name("templates")
+              / "runtime_compat.S"
+          )
+          signal_template = (
+              Path(shimgen.__file__).with_name("templates")
+              / "signal_compat.c"
+          )
+          (out / "runtime_compat.c").write_text(
+              runtime_c.read_text(encoding="utf-8"), encoding="utf-8"
+          )
+          (out / "runtime_compat.S").write_text(
+              runtime_s.read_text(encoding="utf-8"), encoding="utf-8"
+          )
+          (out / "signal_compat.c").write_text(
+              signal_template.read_text(encoding="utf-8"), encoding="utf-8"
+          )
           (out / "build.sh").write_text(BUILD_SH, encoding="utf-8")
           PY
       - name: Build iPhoneOS ARM64 shim
