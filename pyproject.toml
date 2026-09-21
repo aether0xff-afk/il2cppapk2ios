@@ -13,3 +13,6 @@ il2cppapk2ios = "il2cppapk2ios.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+il2cppapk2ios = ["templates/*"]
