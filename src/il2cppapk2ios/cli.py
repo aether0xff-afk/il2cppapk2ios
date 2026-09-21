@@ -8,6 +8,7 @@ from .elf import Elf64
 from .macho import build_arm64_macho_skeleton
 from .translate import translate_phase2
 from .phase3 import translate_phase3
+from .shimgen import generate_shim_scaffold
 
 
 def dump(obj, as_json: bool) -> None:
@@ -68,6 +69,14 @@ def main(argv=None) -> int:
         default="@rpath/libil2cpp_ported.dylib",
     )
 
+    shim = sub.add_parser(
+        "generate-shim",
+        help="generate a Bionic-to-Darwin shim scaffold from ELF imports",
+    )
+    shim.add_argument("elf")
+    shim.add_argument("output")
+    shim.add_argument("--json", action="store_true")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "apk-report":
@@ -93,6 +102,9 @@ def main(argv=None) -> int:
             shim_install_name=args.shim_install_name,
             install_name=args.install_name,
         )
+        dump(report, args.json)
+    elif args.cmd == "generate-shim":
+        report = generate_shim_scaffold(args.elf, args.output)
         dump(report, args.json)
 
     return 0
