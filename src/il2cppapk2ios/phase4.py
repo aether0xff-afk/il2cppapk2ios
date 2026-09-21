@@ -291,12 +291,16 @@ class Phase4Translator(Phase3Translator):
         linkedit_fileoff = rebase_off
         linkedit_size = export_off - linkedit_fileoff + len(export_stream)
 
-        final_size = _align(
-            linkedit_fileoff + linkedit_size,
-            self.page_size,
-        )
+        # Keep __LINKEDIT as the physical end of the Mach-O file.
+        # Apple's codesign expects the last link-edit segment to reach EOF so
+        # it can append LC_CODE_SIGNATURE data and extend __LINKEDIT itself.
+        # Page-padding the file past __LINKEDIT makes strict signing reject the
+        # hand-built dylib before it ever reaches a device.
+        final_size = linkedit_fileoff + linkedit_size
         if len(data) < final_size:
             data.extend(b"\0" * (final_size - len(data)))
+        elif len(data) > final_size:
+            del data[final_size:]
         data[export_off:export_off + len(export_stream)] = export_stream
 
         linkedit_vmaddr = int(report["linkedit"]["vmaddr"], 16)
