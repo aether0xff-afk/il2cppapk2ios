@@ -38,6 +38,7 @@ STB_GLOBAL = 1
 STB_WEAK = 2
 STT_OBJECT = 1
 STT_FUNC = 2
+LC_SYMTAB = 0x2
 
 
 @dataclass
@@ -285,8 +286,14 @@ class Phase4Translator(Phase3Translator):
         exports = self._exports()
         export_stream = _build_export_trie(exports)
         export_off = bind_end
+        # Keep a minimal trailing string table.  Apple's codesign_allocate
+        # expects the final bytes of __LINKEDIT to be owned by a recognized
+        # link-edit load command; a dyld export trie alone is not sufficient
+        # for strict processing on current Xcode.
+        str_off = export_off + len(export_stream)
+        strtab = b"\0"
         linkedit_fileoff = rebase_off
-        linkedit_size = export_off - linkedit_fileoff + len(export_stream)
+        linkedit_size = str_off - linkedit_fileoff + len(strtab)
 
         # Keep __LINKEDIT as the physical end of the Mach-O file.
         # Apple's codesign expects the last link-edit segment to reach EOF so
@@ -299,6 +306,7 @@ class Phase4Translator(Phase3Translator):
         elif len(data) > final_size:
             del data[final_size:]
         data[export_off:export_off + len(export_stream)] = export_stream
+        data[str_off:str_off + len(strtab)] = strtab
 
         linkedit_vmaddr = int(report["linkedit"]["vmaddr"], 16)
 
@@ -361,6 +369,20 @@ class Phase4Translator(Phase3Translator):
                 0,
                 export_off,
                 len(export_stream),
+            )
+        )
+        # Empty nlist table + one-byte NUL string table.  Besides being a valid
+        # minimal LC_SYMTAB, this gives codesign_allocate an explicit final
+        # __LINKEDIT range ending exactly at EOF.
+        commands.append(
+            struct.pack(
+                "<IIIIII",
+                LC_SYMTAB,
+                24,
+                str_off,
+                0,
+                str_off,
+                len(strtab),
             )
         )
 
