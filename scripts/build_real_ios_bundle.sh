@@ -28,21 +28,20 @@ cp "$OUT/shim/build/libbionic_shim.dylib" "$OUT/libbionic_shim.dylib"
 
 echo "[4/6] Compiling iPhoneOS host"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -framework UIKit   -framework CoreGraphics   -Wl,-rpath,@executable_path/Frameworks   -o "$OUT/A2IHost"
+xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -framework UIKit   -framework CoreGraphics   -Wl,-rpath,@executable_path   -o "$OUT/A2IHost"
 
 echo "[5/6] Assembling unsigned .app"
 APP="$OUT/A2IHost.app"
 mkdir -p "$APP"
 cp "$OUT/A2IHost" "$APP/A2IHost"
 cp ios_host/Info.plist "$APP/Info.plist"
-mkdir -p "$APP/Frameworks"
-cp "$OUT/libbionic_shim.dylib" "$APP/Frameworks/libbionic_shim.dylib"
-cp "$OUT/libil2cpp_ported.dylib" "$APP/Frameworks/libil2cpp_ported.dylib"
+cp "$OUT/libbionic_shim.dylib" "$APP/libbionic_shim.dylib"
+cp "$OUT/libil2cpp_ported.dylib" "$APP/libil2cpp_ported.dylib"
 
-# Make the hand-built Mach-O a normally signed nested-code object before
-# third-party IPA resigners touch the bundle.  Standard Frameworks placement
-# also makes recursive resigners discover both dylibs reliably.
-codesign --force --sign - --timestamp=none --no-strict "$APP/Frameworks/libbionic_shim.dylib"
+# Keep probe dylibs at the app root so IPA resigners do not eagerly treat the
+# translated runtime as a launch-time embedded framework.  Pre-sign both files
+# here; the host dlopens them only after UIKit is alive.
+codesign --force --sign - --timestamp=none --no-strict "$APP/libbionic_shim.dylib"
 
 # Apple's codesign_allocate still rejects the translated image even though
 # dyld/llvm accept it.  ldid can emit an ad-hoc SuperBlob for non-ld64 Mach-O
@@ -51,18 +50,18 @@ codesign --force --sign - --timestamp=none --no-strict "$APP/Frameworks/libbioni
 if ! command -v ldid >/dev/null 2>&1; then
   brew install ldid
 fi
-ldid -S "$APP/Frameworks/libil2cpp_ported.dylib"
+ldid -S "$APP/libil2cpp_ported.dylib"
 
-codesign --display --verbose=4 "$APP/Frameworks/libbionic_shim.dylib" || true
-codesign --display --verbose=4 "$APP/Frameworks/libil2cpp_ported.dylib" || true
+codesign --display --verbose=4 "$APP/libbionic_shim.dylib" || true
+codesign --display --verbose=4 "$APP/libil2cpp_ported.dylib" || true
 if [ -f "$OUT/extracted/global-metadata.dat" ]; then
   cp "$OUT/extracted/global-metadata.dat" "$APP/global-metadata.dat"
 fi
 
 echo "[6/6] Structural validation"
-file "$APP/A2IHost" "$APP/Frameworks/libbionic_shim.dylib" "$APP/Frameworks/libil2cpp_ported.dylib"
-xcrun llvm-objdump --macho --exports-trie "$APP/Frameworks/libil2cpp_ported.dylib"   | grep -E 'il2cpp_init|il2cpp_shutdown' || true
-xcrun llvm-objdump --macho --bind "$APP/Frameworks/libil2cpp_ported.dylib"   > "$OUT/ported-bind.txt"
+file "$APP/A2IHost" "$APP/libbionic_shim.dylib" "$APP/libil2cpp_ported.dylib"
+xcrun llvm-objdump --macho --exports-trie "$APP/libil2cpp_ported.dylib"   | grep -E 'il2cpp_init|il2cpp_shutdown' || true
+xcrun llvm-objdump --macho --bind "$APP/libil2cpp_ported.dylib"   > "$OUT/ported-bind.txt"
 plutil -lint "$APP/Info.plist"
 
 echo
