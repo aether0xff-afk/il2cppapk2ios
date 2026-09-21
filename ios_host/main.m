@@ -24,8 +24,9 @@ static void a2i_probe(void) {
     @autoreleasepool {
         a2i_status(@"iOS host started");
         NSBundle *bundle = NSBundle.mainBundle;
-        NSString *shimPath = [bundle pathForResource:@"libbionic_shim" ofType:@"dylib"];
-        NSString *il2cppPath = [bundle pathForResource:@"libil2cpp_ported" ofType:@"dylib"];
+        NSString *frameworks = bundle.privateFrameworksPath;
+        NSString *shimPath = [frameworks stringByAppendingPathComponent:@"libbionic_shim.dylib"];
+        NSString *il2cppPath = [frameworks stringByAppendingPathComponent:@"libil2cpp_ported.dylib"];
         if (!shimPath || !il2cppPath) {
             NSLog(@"[a2i] missing embedded dylib(s): shim=%@ il2cpp=%@", shimPath, il2cppPath);
             return;
