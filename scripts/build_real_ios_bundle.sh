@@ -28,7 +28,7 @@ cp "$OUT/shim/build/libbionic_shim.dylib" "$OUT/libbionic_shim.dylib"
 
 echo "[4/6] Compiling iPhoneOS host"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -o "$OUT/A2IHost"
+xcrun --sdk iphoneos clang   -arch arm64   -isysroot "$SDK"   -miphoneos-version-min=12.0   -fobjc-arc   ios_host/main.m   -framework Foundation   -Wl,-rpath,@executable_path   -o "$OUT/A2IHost"
 
 echo "[5/6] Assembling unsigned .app"
 APP="$OUT/A2IHost.app"
@@ -49,4 +49,17 @@ plutil -lint "$APP/Info.plist"
 
 echo
 echo "Unsigned real-target bundle: $APP"
-echo "Next step: sign the executable and both dylibs with the same iOS identity, install, then capture [a2i] device logs."
+echo "[7/7] Packaging unsigned IPA payload"
+IPA_ROOT="$OUT/ipa"
+rm -rf "$IPA_ROOT"
+mkdir -p "$IPA_ROOT/Payload"
+cp -R "$APP" "$IPA_ROOT/Payload/A2IHost.app"
+(
+  cd "$IPA_ROOT"
+  /usr/bin/zip -qry "../A2IHost-unsigned.ipa" Payload
+)
+
+echo
+echo "Unsigned real-target bundle: $APP"
+echo "Unsigned IPA payload: $OUT/A2IHost-unsigned.ipa"
+echo "Next step: sign with an iOS development/distribution identity + provisioning profile, install, then capture [a2i] device logs."
