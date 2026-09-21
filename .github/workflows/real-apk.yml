@@ -2,15 +2,6 @@ name: real-apk-ios-bundle
 
 on:
   workflow_dispatch:
-    inputs:
-      apk_url:
-        description: "Direct HTTPS URL to the APK (avoid sensitive URLs on a public repo)"
-        required: true
-        type: string
-      apk_sha256:
-        description: "Optional expected SHA-256"
-        required: false
-        type: string
 
 jobs:
   build-real-bundle:
@@ -24,35 +15,27 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Download APK
-        env:
-          APK_URL: ${{ inputs.apk_url }}
-          APK_SHA256: ${{ inputs.apk_sha256 }}
+      - name: Download hardcoded Squad Strike APK
         run: |
-          set -eu
-          case "$APK_URL" in
-            https://*) ;;
-            *) echo "apk_url must use HTTPS" >&2; exit 2 ;;
-          esac
-          if printf '%s' "$APK_URL" | grep -q 'drive.google.com/file/d/'; then
-            FILE_ID="$(printf '%s' "$APK_URL" | sed -E 's#.*drive.google.com/file/d/([^/]+).*#\\1#')"
-            curl --fail --location --retry 3 \
-              --output target.apk \
-              "https://drive.usercontent.google.com/download?id=$FILE_ID&export=download&confirm=t"
-          else
-            curl --fail --location --retry 3 --output target.apk "$APK_URL"
-          fi
+          set -euxo pipefail
+          FILE_ID="1yCu8cEWuAG7J7NmTM-8pofG2M5phQ-up"
+          curl -L --retry 3 \
+            -A "Mozilla/5.0" \
+            -o target.apk \
+            "https://drive.google.com/uc?export=download&id=$FILE_ID"
+          ls -lh target.apk
+          file target.apk
           python3 - <<'PY'
           import zipfile
-          if not zipfile.is_zipfile("target.apk"):
-              raise SystemExit("Downloaded file is not an APK/ZIP; check Drive sharing permissions")
+          p = "target.apk"
+          if not zipfile.is_zipfile(p):
+              head = open(p, "rb").read(200)
+              raise SystemExit(f"Drive did not return APK/ZIP: {head!r}")
+          with zipfile.ZipFile(p) as z:
+              assert "lib/arm64-v8a/libil2cpp.so" in z.namelist()
+              assert any(n.endswith("global-metadata.dat") for n in z.namelist())
+          print("Squad Strike APK validated")
           PY
-          ACTUAL="$(shasum -a 256 target.apk | awk '{print $1}')"
-          echo "APK sha256=$ACTUAL"
-          if [ -n "$APK_SHA256" ] && [ "$ACTUAL" != "$APK_SHA256" ]; then
-            echo "SHA-256 mismatch" >&2
-            exit 3
-          fi
 
       - name: Build real translated iOS bundle
         run: |
@@ -60,12 +43,12 @@ jobs:
 
       - name: Package unsigned app
         run: |
-          ditto -c -k --keepParent             work-real/A2IHost.app             A2IHost-unsigned.zip
+          ditto -c -k --keepParent work-real/A2IHost.app A2IHost-unsigned.zip
 
       - name: Upload reports and unsigned app
         uses: actions/upload-artifact@v4
         with:
-          name: real-apk-ios-probe
+          name: squad-strike-ios-probe
           if-no-files-found: error
           retention-days: 7
           path: |
